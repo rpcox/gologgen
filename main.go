@@ -151,7 +151,10 @@ func main() {
 	}
 	defer conn.Close()
 
+	t0 := time.Now()
 	for i := 1; i <= *count; i++ {
 		NetWrite(conn, &loggen)
 	}
+	t1 := time.Now()
+	fmt.Println(t1.Sub(t0))
 }
