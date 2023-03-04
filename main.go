@@ -120,7 +120,7 @@ func Initialize(l *Loggen) error {
 }
 
 func FormatRecord(l *Loggen) string {
-	date := time.Now().UTC().Format("Jan  2 15:04:05")
+	date := time.Now().UTC().Format(time.RFC3339)
 	return fmt.Sprintf("<%d>%s %s %s[%d]: %s\n", l.PRI, date, l.Host, l.Tag, l.PID, *l.Pad)
 }
 
