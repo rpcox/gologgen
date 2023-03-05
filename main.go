@@ -10,17 +10,19 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 var (
 	//debug    = flag.Bool("debug", false, "Turn on debugging")
-	priority = flag.String("pri", "local0.info", "Send the message with the specified priority")
-	server   = flag.String("s", "TAG", "Use the specified process tag")
-	port     = flag.Int("port", 514, "Send the message to the specified destination port")
-	pad      = flag.Int("pad", 128, "Set the random message to this length")
-	count    = flag.Int("count", 1, "Send this many messages down range")
-	tag      = flag.String("tag", "TAG", "Use the specified process tag")
+	priority   = flag.String("pri", "local0.info", "Send the message with the specified priority")
+	server     = flag.String("s", "TAG", "Use the specified process tag")
+	port       = flag.Int("port", 514, "Send the message to the specified destination port")
+	pad        = flag.Int("pad", 128, "Set the random message to this length")
+	count      = flag.Int("count", 1, "Send this many messages down range")
+	tag        = flag.String("tag", "TAG", "Use the specified process tag")
+	goroutines = flag.Int("gr", 1, "Default count of Go routines")
 
 	help    = flag.Bool("help", false, "Display usage and exit")
 	version = flag.Bool("version", false, "Diplay version and exit")
@@ -119,15 +121,29 @@ func Initialize(l *Loggen) error {
 	return nil
 }
 
-func FormatRecord(l *Loggen) string {
+func FormatRecord(l *Loggen, m *sync.Mutex) string {
 	date := time.Now().UTC().Format(time.RFC3339)
-	return fmt.Sprintf("<%d>%s %s %s[%d]: %s\n", l.PRI, date, l.Host, l.Tag, l.PID, *l.Pad)
+	m.Lock()
+	s := fmt.Sprintf("<%d>%s %s %s[%d]: %s\n", l.PRI, date, l.Host, l.Tag, l.PID, *l.Pad)
+	m.Unlock()
+	return s
 }
 
-func NetWrite(nc net.Conn, l *Loggen) int {
-	m := FormatRecord(l)
-	nc.Write([]byte(m))
-	return 1
+func SendIt(l *Loggen, i int, wg *sync.WaitGroup, m *sync.Mutex) {
+	conn, err := net.Dial("tcp", l.Dst)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	t0 := time.Now()
+	for i := 1; i <= *count; i++ {
+		m := FormatRecord(l, m)
+		conn.Write([]byte(m))
+	}
+	t1 := time.Now()
+	fmt.Println("Go routine", i, "completed. elapsed", t1.Sub(t0))
+	wg.Done()
 }
 
 func main() {
@@ -145,16 +161,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-	conn, err := net.Dial("tcp", loggen.Dst)
-	if err != nil {
-		log.Fatal(err)
+	if *goroutines > 3 {
+		fmt.Println("goroutines =", *goroutines, ".  get real")
+		os.Exit(0)
 	}
-	defer conn.Close()
 
-	t0 := time.Now()
-	for i := 1; i <= *count; i++ {
-		NetWrite(conn, &loggen)
+	var wg sync.WaitGroup
+	var m sync.Mutex
+	for i := 1; i <= *goroutines; i++ {
+		wg.Add(1)
+		go SendIt(&loggen, i, &wg, &m)
 	}
-	t1 := time.Now()
-	fmt.Println(t1.Sub(t0))
+
+	wg.Wait()
+	fmt.Println("All go routines completed execution")
 }
