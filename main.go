@@ -161,11 +161,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if *goroutines > 3 {
-		fmt.Println("goroutines =", *goroutines, ".  get real")
-		os.Exit(0)
-	}
-
 	var wg sync.WaitGroup
 	var m sync.Mutex
 	for i := 1; i <= *goroutines; i++ {
