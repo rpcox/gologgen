@@ -16,13 +16,13 @@ import (
 
 var (
 	//debug    = flag.Bool("debug", false, "Turn on debugging")
-	priority   = flag.String("pri", "local0.info", "Send the message with the specified priority")
-	server     = flag.String("s", "TAG", "Use the specified process tag")
+	priority   = flag.String("pri", "local0.info", "Set the specified priority for the syslog record")
+	server     = flag.String("s", "", "Send the message to the specified server")
 	port       = flag.Int("port", 514, "Send the message to the specified destination port")
-	pad        = flag.Int("pad", 128, "Set the random message to this length")
-	count      = flag.Int("count", 1, "Send this many messages down range")
-	tag        = flag.String("tag", "TAG", "Use the specified process tag")
-	goroutines = flag.Int("gr", 1, "Default count of Go routines")
+	mlen       = flag.Int("mlen", 128, "Set the random message to this length")
+	count      = flag.Int("count", 1, "The number of messages to send down range")
+	tag        = flag.String("tag", "TAG", "Use the specified process tag in the syslog record")
+	goroutines = flag.Int("gr", 1, "Specify the number of Go routines to initiate")
 
 	help    = flag.Bool("help", false, "Display usage and exit")
 	version = flag.Bool("version", false, "Diplay version and exit")
@@ -79,6 +79,7 @@ func Usage() {
 	Generate syslog traffic
 
   OPTIONS
+ 
  `
 	fmt.Println(doc)
 	flag.PrintDefaults()
@@ -115,7 +116,7 @@ func Initialize(l *Loggen) error {
 	l.Dst = *server + ":" + strconv.Itoa(*port)
 	l.Tag = *tag
 
-	p := RandomString(*pad)
+	p := RandomString(*mlen)
 	l.Pad = &p
 
 	return nil
