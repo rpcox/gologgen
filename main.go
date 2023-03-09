@@ -143,7 +143,7 @@ func SendIt(l *Loggen, i int, wg *sync.WaitGroup, m *sync.Mutex) {
 		conn.Write([]byte(m))
 	}
 	t1 := time.Now()
-	fmt.Println("Go routine", i, "completed. elapsed", t1.Sub(t0))
+	fmt.Println("Go routine[", i, "]completed. elapsed", t1.Sub(t0))
 	wg.Done()
 }
 
@@ -170,5 +170,5 @@ func main() {
 	}
 
 	wg.Wait()
-	fmt.Println("All go routines completed execution")
+	fmt.Println("All go routines have completed execution")
 }
