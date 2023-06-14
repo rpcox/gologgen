@@ -14,9 +14,13 @@ import (
 	"time"
 )
 
+const _version = "0.1"
+const _tool = "gologgen"
+
 var (
 	//debug    = flag.Bool("debug", false, "Turn on debugging")
 	priority   = flag.String("pri", "local0.info", "Set the specified priority for the syslog record")
+	facDump    = flag.Bool("fac-dump", false, "Dump the facility names and values")
 	server     = flag.String("s", "", "Send the message to the specified server")
 	port       = flag.Int("port", 514, "Send the message to the specified destination port")
 	mlen       = flag.Int("mlen", 128, "Set the random message to this length")
@@ -28,14 +32,30 @@ var (
 	version = flag.Bool("version", false, "Diplay version and exit")
 
 	Facility = map[string]int{
-		"local0": 16,
-		"local1": 17,
-		"local2": 18,
-		"local3": 19,
-		"local4": 20,
-		"local5": 21,
-		"local6": 22,
-		"local7": 23,
+		"kernel":   0,
+		"user":     1,
+		"mail":     2,
+		"daemon":   3,
+		"auth":     4,
+		"syslog":   5,
+		"lpr":      6,
+		"news":     7,
+		"uucp":     8,
+		"cron":     9,
+		"authpriv": 10,
+		"ftp":      11,
+		"ntp":      12,
+		"log1":     13,
+		"log2":     14,
+		"clock":    15,
+		"local0":   16,
+		"local1":   17,
+		"local2":   18,
+		"local3":   19,
+		"local4":   20,
+		"local5":   21,
+		"local6":   22,
+		"local7":   23,
 	}
 
 	Severity = map[string]int{
@@ -61,14 +81,16 @@ type Loggen struct {
 	Pad  *string
 }
 
-func ShowVersion() {
-	ver := "0.1"
-	fmt.Println("gologgen v", ver)
-	os.Exit(0)
+func Version(v bool) {
+	if v {
+		fmt.Println(_tool, " v", _version)
+		os.Exit(0)
+	}
 }
 
-func Usage() {
-	doc := `
+func Usage(b bool) {
+	if b {
+		doc := `
   NAME
   	gologgen - syslog record generator
 
@@ -81,9 +103,10 @@ func Usage() {
   OPTIONS
  
  `
-	fmt.Println(doc)
-	flag.PrintDefaults()
-	os.Exit(0)
+		fmt.Println(doc)
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
 }
 
 // RandomString - Generate a random string of A-Z chars with len = l
@@ -96,7 +119,6 @@ func RandomString(len int) string {
 }
 
 func Initialize(l *Loggen) error {
-
 	// priority = facility * 8 + severity
 	s := strings.Split(*priority, ".")
 	facility, okf := Facility[s[0]]
@@ -122,6 +144,7 @@ func Initialize(l *Loggen) error {
 	return nil
 }
 
+// Format the record for sending downstream
 func FormatRecord(l *Loggen, m *sync.Mutex) string {
 	date := time.Now().UTC().Format(time.RFC3339)
 	m.Lock()
@@ -150,11 +173,8 @@ func SendIt(l *Loggen, i int, wg *sync.WaitGroup, m *sync.Mutex) {
 func main() {
 
 	flag.Parse()
-	if *version {
-		ShowVersion()
-	} else if *help || flag.NFlag() < 1 {
-		Usage()
-	}
+	Version(*version)
+	Usage(*help || flag.NFlag() < 1)
 
 	var loggen Loggen
 	err := Initialize(&loggen)
