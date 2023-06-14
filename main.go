@@ -14,22 +14,12 @@ import (
 	"time"
 )
 
-const _version = "0.1"
+const _version = "0.2"
 const _tool = "gologgen"
 
 var (
-	//debug    = flag.Bool("debug", false, "Turn on debugging")
-	priority   = flag.String("pri", "local0.info", "Set the specified priority for the syslog record")
-	facDump    = flag.Bool("fac-dump", false, "Dump the facility names and values")
-	server     = flag.String("s", "", "Send the message to the specified server")
-	port       = flag.Int("port", 514, "Send the message to the specified destination port")
-	mlen       = flag.Int("mlen", 128, "Set the random message to this length")
-	count      = flag.Int("count", 1, "The number of messages to send down range")
-	tag        = flag.String("tag", "TAG", "Use the specified process tag in the syslog record")
-	goroutines = flag.Int("gr", 1, "Specify the number of Go routines to initiate")
-
-	help    = flag.Bool("help", false, "Display usage and exit")
-	version = flag.Bool("version", false, "Diplay version and exit")
+	_commit string
+	_branch string
 
 	Facility = map[string]int{
 		"kernel":   0,
@@ -71,19 +61,21 @@ var (
 )
 
 type Loggen struct {
-	Dst string
+	Dest string
 	//File string
-	Host string
-	PID  int
-	Port int
-	PRI  int
-	Tag  string
-	Pad  *string
+	Host  string
+	PID   int
+	Port  int
+	PRI   int
+	Tag   string
+	Pad   *string
+	Count int
+	Proto string
 }
 
 func Version(v bool) {
 	if v {
-		fmt.Println(_tool, " v", _version)
+		fmt.Fprintf(os.Stdout, "%s v%s\n", _tool, _version)
 		os.Exit(0)
 	}
 }
@@ -110,38 +102,29 @@ func Usage(b bool) {
 }
 
 // RandomString - Generate a random string of A-Z chars with len = l
-func RandomString(len int) string {
+func RandomString(len int) *string {
 	bytes := make([]byte, len)
 	for i := 0; i < len; i++ {
 		bytes[i] = byte(65 + rand.Intn(25)) //A=65 and Z = 65+25
 	}
-	return string(bytes)
+	s := string(bytes)
+	return &s
 }
 
-func Initialize(l *Loggen) error {
+// Set the syslog priority
+func setPriority(priority *string) int {
 	// priority = facility * 8 + severity
 	s := strings.Split(*priority, ".")
-	facility, okf := Facility[s[0]]
-	severity, oks := Severity[s[1]]
+	facility, ok_facility := Facility[s[0]]
+	severity, ok_severity := Severity[s[1]]
 
-	if okf && oks {
-		l.PRI = facility*8 + severity
+	if ok_facility && ok_severity {
+		return facility*8 + severity
 	} else {
-		err := fmt.Errorf("'%s' not supported", *priority)
-		return err
+		log.Fatal("priority '", *priority, "' not supported")
 	}
 
-	//l.File = *file
-	l.Host, _ = os.Hostname()
-	l.PID = os.Getpid()
-	l.Port = *port
-	l.Dst = *server + ":" + strconv.Itoa(*port)
-	l.Tag = *tag
-
-	p := RandomString(*mlen)
-	l.Pad = &p
-
-	return nil
+	return 0
 }
 
 // Format the record for sending downstream
@@ -153,15 +136,16 @@ func FormatRecord(l *Loggen, m *sync.Mutex) string {
 	return s
 }
 
+// Send it all down range
 func SendIt(l *Loggen, i int, wg *sync.WaitGroup, m *sync.Mutex) {
-	conn, err := net.Dial("tcp", l.Dst)
+	conn, err := net.Dial(l.Proto, l.Dest)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Close()
 
 	t0 := time.Now()
-	for i := 1; i <= *count; i++ {
+	for i := 1; i <= l.Count; i++ {
 		m := FormatRecord(l, m)
 		conn.Write([]byte(m))
 	}
@@ -171,22 +155,46 @@ func SendIt(l *Loggen, i int, wg *sync.WaitGroup, m *sync.Mutex) {
 }
 
 func main() {
+	var (
+		priority = flag.String("pri", "local0.info", "Set the specified priority for the syslog record")
+		//facDump    = flag.Bool("facility-dump", false, "Dump the facility names and values")
+		//rfc3339    = flag.Bool("rfc3339", false, "Use RFC 3339 date format")
+		server     = flag.String("server", "", "Send the message to the specified server")
+		port       = flag.Int("port", 514, "Send the message to the specified destination port")
+		mlen       = flag.Int("len", 128, "Set the random message to this length")
+		count      = flag.Int("count", 1, "The number of messages to send down range")
+		tag        = flag.String("tag", "gologgen", "Use the specified process tag in the syslog record")
+		goroutines = flag.Int("gr", 1, "Specify the number of Go routines to initiate")
+		tcp        = flag.Bool("tcp", false, "Use TCPv4.  Default is UDPv4")
+
+		help    = flag.Bool("help", false, "Display usage and exit")
+		version = flag.Bool("version", false, "Diplay version and exit")
+	)
 
 	flag.Parse()
 	Version(*version)
 	Usage(*help || flag.NFlag() < 1)
 
-	var loggen Loggen
-	err := Initialize(&loggen)
-	if err != nil {
-		log.Fatal(err)
+	l := Loggen{Dest: *server + ":" + strconv.Itoa(*port)}
+	l.Host, _ = os.Hostname()
+	l.PID = os.Getpid()
+	l.Port = *port
+	l.PRI = setPriority(priority)
+	l.Tag = *tag
+	l.Pad = RandomString(*mlen)
+	l.Count = *count
+
+	if *tcp {
+		l.Proto = "tcp4"
+	} else {
+		l.Proto = "udp4"
 	}
 
 	var wg sync.WaitGroup
 	var m sync.Mutex
 	for i := 1; i <= *goroutines; i++ {
 		wg.Add(1)
-		go SendIt(&loggen, i, &wg, &m)
+		go SendIt(&l, i, &wg, &m)
 	}
 
 	wg.Wait()
