@@ -213,6 +213,8 @@ func main() {
 	contentLength := flag.Int("msg-length", 64, "Set the random message to this length")
 	goroutines := flag.Int("gr", 1, "Specify the number of Go routines to initiate")
 	priority := flag.String("priority", "local0.info", "Set the specified priority for the syslog record")
+	facList := flag.Bool("fac-list", false, "Display the facility list and related integer values")
+	sevList := flag.Bool("sev-list", false, "Display the severity list and related integer values")
 
 	udp := flag.Bool("udp", false, "Use UDP")
 	tcp := flag.Bool("tcp", false, "Use TCP")
@@ -224,6 +226,14 @@ func main() {
 	flag.Parse()
 	Version(*version)
 	Usage(*help || flag.NFlag() < 1)
+	if *facList {
+		syslog.FacilityList()
+		os.Exit(0)
+	}
+	if *sevList {
+		syslog.SeverityList()
+		os.Exit(0)
+	}
 	ExitUnless(len(lg.Server) > 0, "-server is required")
 	ExitUnless((lg.Port > 0) && (lg.Port < 65535), "-port must > 0 and <= 65535")
 	ExitUnless(lg.Count > 0, "-count must be > 0")

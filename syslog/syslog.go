@@ -3,6 +3,7 @@ package syslog
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -118,6 +119,47 @@ func SetIETFRecordFormat(r *RFC5424) {
 	s = fmt.Sprintf("<%d>%d %%s %s %s %s %s %s %%s\n", r.PRI, r.Version, r.Hostname, r.AppName, _procid, r.MsgID, r.Sd)
 
 	r.Format = &s
+}
+
+type kvPair struct {
+	Key   string
+	Value int
+}
+
+type kvPairList []kvPair
+
+func (p kvPairList) Len() int           { return len(p) }
+func (p kvPairList) Less(i, j int) bool { return p[i].Value < p[j].Value }
+func (p kvPairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+func FacilityList() {
+	kvp := make(kvPairList, len(Facility))
+	i := 0
+	for k, v := range Facility {
+		kvp[i] = kvPair{k, v}
+		i++
+	}
+
+	//descending -> sort.Sort(sort.Reverse(kvp))
+	sort.Sort(kvp)
+	for _, v := range kvp {
+		fmt.Printf("%10s   %d\n", v.Key, v.Value)
+	}
+}
+
+func SeverityList() {
+	kvp := make(kvPairList, len(Severity))
+	i := 0
+	for k, v := range Severity {
+		kvp[i] = kvPair{k, v}
+		i++
+	}
+
+	//descending -> sort.Sort(sort.Reverse(kvp))
+	sort.Sort(kvp)
+	for _, v := range kvp {
+		fmt.Printf("%10s   %d\n", v.Key, v.Value)
+	}
 }
 
 //SDG
