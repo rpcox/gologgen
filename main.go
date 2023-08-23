@@ -133,7 +133,7 @@ func SendIetf(dst, format, proto, msg string, id, count int, wg *sync.WaitGroup)
 		conn.Write([]byte(s))
 	}
 	t1 := time.Now()
-	fmt.Println("Go routine [", id, "] completed. elapsed", t1.Sub(t0))
+	fmt.Printf("go routine[%d] completed. %d records. time elapsed: %v\n", id, count, t1.Sub(t0))
 	wg.Done()
 }
 
@@ -168,7 +168,7 @@ func SendBsd(dst, format, proto, msg string, id, count int, wg *sync.WaitGroup) 
 		conn.Write([]byte(s))
 	}
 	t1 := time.Now()
-	fmt.Println("Go routine [", id, "] completed. elapsed", t1.Sub(t0))
+	fmt.Printf("go routine[%d] completed. %d records. time elapsed: %v\n", id, count, t1.Sub(t0))
 	wg.Done()
 }
 
@@ -244,7 +244,7 @@ func main() {
 
 	lg.GoRoutines = *goroutines
 	lg.Message = RandomString(*contentLength)
-	fmt.Printf("Sending %d syslog records down range\n", *goroutines*lg.Count)
+	fmt.Printf("Sending %d syslog records.\n", *goroutines*lg.Count)
 
 	if *rfc3164 {
 		bsd.PRI = pri
