@@ -215,6 +215,7 @@ func main() {
 	priority := flag.String("priority", "local0.info", "Set the specified priority for the syslog record")
 	facList := flag.Bool("fac-list", false, "Display the facility list and related integer values")
 	sevList := flag.Bool("sev-list", false, "Display the severity list and related integer values")
+	calcPRI := flag.String("calc-pri", "", "Reverse a PRI integer value or calculate PRI from \"facility.severity\".  See -pri")
 
 	udp := flag.Bool("udp", false, "Use UDP")
 	tcp := flag.Bool("tcp", false, "Use TCP")
@@ -234,6 +235,15 @@ func main() {
 		syslog.SeverityList()
 		os.Exit(0)
 	}
+	if *calcPRI != "" {
+		s, err := syslog.CalculatePRI(*calcPRI)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(s)
+		os.Exit(0)
+	}
+
 	ExitUnless(len(lg.Server) > 0, "-server is required")
 	ExitUnless((lg.Port > 0) && (lg.Port < 65535), "-port must > 0 and <= 65535")
 	ExitUnless(lg.Count > 0, "-count must be > 0")

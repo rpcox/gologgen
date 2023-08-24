@@ -3,7 +3,9 @@ package syslog
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -128,6 +130,7 @@ type kvPair struct {
 
 type kvPairList []kvPair
 
+// Needed to implement sort.Interface in Facility/Severity lists
 func (p kvPairList) Len() int           { return len(p) }
 func (p kvPairList) Less(i, j int) bool { return p[i].Value < p[j].Value }
 func (p kvPairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
@@ -160,6 +163,78 @@ func SeverityList() {
 	for _, v := range kvp {
 		fmt.Printf("%10s   %d\n", v.Key, v.Value)
 	}
+}
+
+func invertMap(m map[string]int) map[int]string {
+	im := make(map[int]string, len(m))
+	for k, v := range m {
+		im[v] = k
+	}
+	return im
+}
+
+func CalculatePRI(s string) (string, error) {
+	//isAllDigits := false
+	// Do we have a facility.severity string or number as string?
+	isAllDigits, err := regexp.Match(`^\d+$`, []byte(s))
+	if err != nil {
+		return "", err
+	}
+
+	// All digits.  Convert and return the string
+	if isAllDigits {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			return "", err
+		}
+
+		return ReversePRI(i)
+	}
+
+	// Could be facility.severity
+	slice := strings.Split(s, ".")
+	if len(slice) != 2 {
+		return "", fmt.Errorf("\"%s\" is not a valid combination", s)
+	}
+
+	_, facOK := Facility[slice[0]]
+	_, sevOK := Severity[slice[1]]
+
+	if facOK && sevOK {
+		n, err := SetPriority(s)
+		if err != nil {
+			return "", err
+		}
+
+		return strconv.Itoa(n), nil
+	}
+
+	return "", fmt.Errorf("\"%s\" is invalid", s)
+}
+func ReversePRI(pri int) (string, error) {
+	if pri < 0 {
+		return "", fmt.Errorf("%s", "PRI < 0")
+	}
+	invertFac := invertMap(Facility)
+	invertSev := invertMap(Severity)
+
+	facInt := pri >> 3
+	sevInt := pri & 7
+
+	var s string
+
+	if _, ok := invertFac[facInt]; ok {
+		if _, ok := invertSev[sevInt]; ok {
+			s = invertFac[facInt] + "." + invertSev[sevInt]
+		} else {
+			return "", fmt.Errorf("severity integer value of %d does not exist", sevInt)
+		}
+
+	} else {
+		return "", fmt.Errorf("facility integer value of %d does not exist", facInt)
+	}
+
+	return s, nil
 }
 
 //SDG
