@@ -23,32 +23,32 @@ As received at the destination
 
 ### Generate default RFC 5424 records
 
-    gologgen -tcp -server 192.168.0.253
+    gologgen -tcp -server loghost
 
 As received at the destination
 
-    <134>1 2023-08-24T12:38:15.92Z Rics-MBP gologgen - - - VHQBLXNPCIJMSOPHKSKQCOCDAAIGERQTYVVKWQLPRDIQSNHNOLFBRQFAOBDSKKTT
+    <134>1 2023-08-24T12:38:15.92Z spud gologgen - - - VHQBLXNPCIJMSOPHKSKQCOCDAAIGERQTYVVKWQLPRDIQSNHNOLFBRQFAOBDSKKTT
 
 ### Generate RFC 5424 records with MSGID
 
-    gologgen -tcp -server 192.168.0.253 -msgid MYID
+    gologgen -tcp -server loghost -msgid MYID
 
 As received at the destination
 
-    <134>1 2023-08-24T12:38:06.99Z Rics-MBP gologgen - MYID - EUOPTALBYVVFWXAAQKMSLCOFURERYDWTLGMTUVPAEIDTBAPJVQMYNGCATVXHKUAM
+    <134>1 2023-08-24T12:38:06.99Z spud gologgen - MYID - EUOPTALBYVVFWXAAQKMSLCOFURERYDWTLGMTUVPAEIDTBAPJVQMYNGCATVXHKUAM
 
 ### Generate RFC 5424 records with MSGID and PROCID (PID)
 
-    gologgen -tcp -server 192.168.0.253 -msgid MYID -procid
+    gologgen -tcp -server loghost -msgid MYID -procid
 
 As received at the destination
 
-    <134>1 2023-08-24T12:39:15.17Z Rics-MBP gologgen 93300 MYID - YDQGDMADSJAYAQFJBNNILTKOBIBDBXXJESVVHRODNQASQHIGMEUCGKNFFKLLNXPM
+    <134>1 2023-08-24T12:39:15.17Z spud gologgen 93300 MYID - YDQGDMADSJAYAQFJBNNILTKOBIBDBXXJESVVHRODNQASQHIGMEUCGKNFFKLLNXPM
 
 ### Generate RFC 5424 records with MSGID, PROCID and structured data
 
-    gologgen -tcp -server 192.168.0.253 -msgid MYID -procid -sd "[exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"]"
+    gologgen -tcp -server loghost -msgid MYID -procid -sd "[exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"]"
 
 As received at the destination
 
-    <134>1 2023-08-24T12:42:33.08Z Rics-MBP gologgen 93340 MYID [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] QFCWTLDNWRJMDLFQYNFXHIGEUFLWOODAOJSISGSHDFWMSXCTVVPJSPALJXAKJXSI
+    <134>1 2023-08-24T12:42:33.08Z spud gologgen 93340 MYID [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] QFCWTLDNWRJMDLFQYNFXHIGEUFLWOODAOJSISGSHDFWMSXCTVVPJSPALJXAKJXSI
