@@ -1,0 +1,10 @@
+github.com/rpcox/gologgen/pkg/loggen v0.0.1 h1:emOmG6FN0dLtCwzMufNG7j325b1+Y2RqQixKTL8/vwI=
+github.com/rpcox/gologgen/pkg/loggen v0.0.1/go.mod h1:cR8rWusFtfMFL+/GKMOZHdWUz55uvCRoOSEhKfNtDSM=
+github.com/rpcox/gologgen/pkg/loggen v0.0.3 h1:/fdXjmFkHAVKQv2lsG1k0LoSZ04Guwf22V6kkvV6Hdc=
+github.com/rpcox/gologgen/pkg/loggen v0.0.3/go.mod h1:cR8rWusFtfMFL+/GKMOZHdWUz55uvCRoOSEhKfNtDSM=
+github.com/rpcox/pkg/exit v0.3.4 h1:uWWsaXK1z5L4NGIVNfWtVMWMWeW471920C0GJ4e1rpo=
+github.com/rpcox/pkg/exit v0.3.4/go.mod h1:kYDbQ8f3aT9uJGeioXy/Dd1OVrIN095Pw28eKFzknl8=
+github.com/rpcox/pkg/exit v0.3.5 h1:z9SJqdYetYeM6dW3ypqJkWc0VDpUCv5KRDX+UpBM28A=
+github.com/rpcox/pkg/exit v0.3.5/go.mod h1:kYDbQ8f3aT9uJGeioXy/Dd1OVrIN095Pw28eKFzknl8=
+github.com/rpcox/pkg/exit v0.3.6 h1:fJyII2OFXGH8qA42B46ZFtcV/cLXCgS0yoysXt+lhKI=
+github.com/rpcox/pkg/exit v0.3.6/go.mod h1:kYDbQ8f3aT9uJGeioXy/Dd1OVrIN095Pw28eKFzknl8=
