@@ -5,7 +5,11 @@ import (
 	"strings"
 )
 
+const tool = "pkg-loggen"
+const version = `v0.0.2`
+
 var (
+
 	// RFC 5424 6.2.1 p10
 	Facility = map[string]int{
 		"kernel":   0,  // kernel messages
@@ -36,33 +40,64 @@ var (
 
 	// RFC 5424 6.2.1 p11
 	Severity = map[string]int{
-		"emerg":    0, // Emergency: system is unusable
-		"alert":    1, // Alert: action must be taken immediately
-		"critical": 2, // Critical: critical conditions
-		"error":    3, // Error: error conditions
-		"warn":     4, // Warning: warning conditions
-		"notice":   5, // Notice: normal but significant condition
-		"info":     6, // Informational: informational messages
-		"debug":    7, // Debug: debug-level messages
+		"emerg":  0, // Emergency: system is unusable
+		"alert":  1, // Alert: action must be taken immediately
+		"crit":   2, // Critical: critical conditions
+		"error":  3, // Error: error conditions
+		"warn":   4, // Warning: warning conditions
+		"notice": 5, // Notice: normal but significant condition
+		"info":   6, // Informational: informational messages
+		"debug":  7, // Debug: debug-level messages
 	}
 )
 
-// Receiving priorit as a string (e.g., 'local0.info') convert it to an integer
+func GetVersion() string {
+	return fmt.Sprintf("%s %s", tool, version)
+}
+
+func mapToSlice(m map[string]int) []string {
+	sl := make([]string, len(m))
+	for name, value := range m {
+		sl[value] = name
+	}
+
+	return sl
+}
+
+func GetFacilityNames() []string {
+	return mapToSlice(Facility)
+}
+
+func GetSeverityNames() []string {
+	return mapToSlice(Severity)
+}
+
+// Receiving priority as a dot separated strings (e.g., 'local0.info'), convert to an integer
+// On success return PRI, nil
+// On fail, return -1, err
 func PriValAtoi(priority string) (int, error) {
 	sl := strings.Split(priority, ".")
+	if len(sl) < 2 {
+		return -1, fmt.Errorf("priority string format. expected facility.severity")
+	}
+
 	f := strings.ToLower(sl[0])
 	s := strings.ToLower(sl[1])
 	facility, facility_exists := Facility[f]
 	severity, severity_exists := Severity[s]
 
-	if facility_exists && severity_exists {
-		// RFC5424 6.2.1 p11
-		return (facility << 3) + severity, nil
+	if facility_exists {
+		if severity_exists {
+			// RFC5424 6.2.1 p11
+			return (facility << 3) + severity, nil
+		}
+		return -1, fmt.Errorf("severity '%s' not supported", sl[1])
 	}
 
-	return -1, fmt.Errorf("'%s' not supported", priority)
+	return -1, fmt.Errorf("facility '%s' not supported", sl[0])
 }
 
+// Used to invert Facility and Severity maps
 func invertMap(m map[string]int) map[int]string {
 	im := make(map[int]string, len(m))
 	for k, v := range m {
@@ -71,6 +106,9 @@ func invertMap(m map[string]int) map[int]string {
 	return im
 }
 
+// Receiving priority as an integer, convert string w/ format facility.severity
+// On success return facility.severity, nil
+// On fail, return “, err
 func PriValItoa(priority int) (string, error) {
 	if priority < 0 || priority > 191 {
 		return ``, fmt.Errorf("priority ('%d') > 191. see rfc5424 section 6", priority)
@@ -94,5 +132,4 @@ func PriValItoa(priority int) (string, error) {
 	} else {
 		return ``, fmt.Errorf("facility '%s' does not exist. see rfc5424 6.2.1", fs)
 	}
-
 }
