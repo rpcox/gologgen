@@ -6,7 +6,7 @@ import (
 )
 
 const tool = "pkg-loggen"
-const version = `v0.0.2`
+const version = `v0.0.3`
 
 var (
 
