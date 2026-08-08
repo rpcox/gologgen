@@ -1,12 +1,25 @@
 package loggen
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
+	"syscall"
+	"text/template"
+	"time"
+
+	"github.com/rpcox/pkg/exit"
 )
 
-const tool = "pkg-loggen"
-const version = `v0.0.3`
+const (
+	tool    = "pkg-loggen"
+	version = `v0.0.3`
+)
 
 var (
 
@@ -49,19 +62,13 @@ var (
 		"info":   6, // Informational: informational messages
 		"debug":  7, // Debug: debug-level messages
 	}
+
+	_debug     = false
+	timeFormat = `2006-01-02 15:04:05.000000`
 )
 
 func GetVersion() string {
 	return fmt.Sprintf("%s %s", tool, version)
-}
-
-func mapToSlice(m map[string]int) []string {
-	sl := make([]string, len(m))
-	for name, value := range m {
-		sl[value] = name
-	}
-
-	return sl
 }
 
 func GetFacilityNames() []string {
@@ -133,3 +140,216 @@ func PriValItoa(priority int) (string, error) {
 		return ``, fmt.Errorf("facility '%s' does not exist. see rfc5424 6.2.1", fs)
 	}
 }
+
+type Record struct {
+	Pri     int
+	Version int
+	//TimeStamp string  -- just a reminder that this field is in the record. applied elsewhere using type Ts
+	Hostname string
+	AppName  string
+	Pid      string
+	MsgId    string
+	Sd       string
+	Msg      *string
+}
+
+type Destination struct {
+	Dst      string // from -dst
+	DstType  string // stdout, name, IP
+	Port     string
+	Protocol string
+}
+
+type Operation struct {
+	Bsd        bool
+	Count      int
+	GoRoutines int
+	MsgLen     int
+	Tls        bool
+	Udp        bool
+}
+
+type Options struct {
+	Debug       bool
+	Record      Record
+	Destination Destination
+	Operation   Operation
+	Pri         string
+	Stats       bool
+}
+
+type Loggen struct {
+	format     string
+	TimeFormat string
+	RecordTmpl string
+	opt        *Options
+	fileWChan  chan (string)
+	w          io.Writer
+	statsChan  chan Stats
+	statsSlice []Stats
+	start      time.Time
+}
+
+type Ts struct {
+	TimeStamp string
+}
+
+type Interrupt struct {
+	mu  sync.Mutex
+	yes bool
+	at  string
+}
+
+func NewLoggen(opts *Options) *Loggen {
+	var lg Loggen
+	lg.opt = opts
+	_debug = lg.opt.Debug
+	err := validatePort(opts.Destination.Port) // must be valid port (0 - 65535)
+	exit.If(err != nil, err, ErrPortRange)
+
+	T, err := validateWDst(opts.Destination.Dst) // file, stdout, name or IP
+	exit.If(err != nil, err, ErrHostname)
+	lg.opt.Destination.DstType = T
+
+	lg.format = setFormat(lg.opt.Operation.Bsd) // bsd or ietf
+
+	p, err := setProtocol(lg.opt.Operation) // udp, tcp or tls
+	exit.If(err != nil, err, ErrProtocol)
+	lg.opt.Destination.Protocol = p
+
+	err = validateCount(lg.opt.Operation.Count) // can't be < 0
+	exit.If(err != nil, err, ErrCount)
+
+	lg.opt.Record.Msg = setMessage(lg.opt.Operation.MsgLen) // gen rand string for now
+
+	n, err := setPriority(lg.opt.Pri) // convert 'facility.severity' to int
+	exit.If(err != nil, err, ErrPriority)
+	lg.opt.Record.Pri = n
+
+	checkConcurrency(lg.opt.Operation.GoRoutines) // give heads up if -gr > GOMAXPROCS
+
+	lg.opt.Record.Pid = strconv.Itoa(os.Getpid())
+	h, err := os.Hostname()
+	if err != nil {
+		h = tool + `host`
+		fmt.Fprintf(os.Stderr, "%%note: undetermined host name. setting hostname = '%s'\n", h)
+	}
+
+	lg.opt.Record.Hostname = h
+	lg.RecordTmpl = setTemplate(lg.opt.Operation.Bsd, lg.format, lg.opt.Record)
+	lg.TimeFormat = setTimeFormat(lg.opt.Operation.Bsd)
+	lg.statsChan = make(chan Stats, lg.opt.Operation.GoRoutines+1)
+
+	return &lg
+}
+
+// loggen -dst stdout -rfc3164 -pri kernel.info -appname spud                        -count 2 -msglen 128 -gr 2
+// loggen -dst stdout          -pri kernel.info -appname spud -msgid test -sd slsldf -count 2 -msglen 128 -gr 2
+func (lg *Loggen) Exec() error {
+
+	switch lg.opt.Destination.DstType {
+	case `file`:
+		lg.fileWChan = make(chan string, 100)
+		// need to determine file, pipe, or device
+
+	case `stdout`:
+		lg.w = os.Stdout
+		stdout(lg)
+	case `ip`:
+		fallthrough
+	case `name`:
+		var wg sync.WaitGroup
+		var client clientFunc
+
+		switch lg.opt.Destination.Protocol {
+		case `udp`:
+			client = udpClient
+		case `tcp`:
+			client = tcpClient
+		case `tls`:
+			client = tlsClient
+		default:
+			// shouldn't be here
+			return fmt.Errorf("%%err: unsupported protcol: '%s'", lg.opt.Destination.DstType)
+		}
+
+		var intr Interrupt
+		lg.start = time.Now()
+		fmt.Printf(" Starting: %s\n", lg.start.UTC().Format(timeFormat))
+		for i := range lg.opt.Operation.GoRoutines {
+			wg.Add(1)
+			go client(i+1, *lg, &intr, &wg)
+		}
+
+		wg.Wait()
+		close(lg.statsChan)
+		if intr.yes {
+			fmt.Printf("\nInterrupt: %s\n", intr.at)
+		}
+		fmt.Printf("  Elapsed: %v\n", time.Since(lg.start))
+
+		for stat := range lg.statsChan {
+			lg.statsSlice = append(lg.statsSlice, stat)
+		}
+
+	}
+
+	return nil
+}
+
+func ReportWriteError(err error) {
+	if errors.Is(err, syscall.EPIPE) {
+		fmt.Printf("%%EPIPE: broken pipe\n")
+		return
+	}
+	if errors.Is(err, syscall.ECONNRESET) {
+		fmt.Printf("%%ECONNRESET: connection reset by peer\n")
+		return
+	}
+
+	if errors.Is(err, syscall.EBADF) {
+		fmt.Printf("%%EBADF: bad file descriptorr\n")
+		return
+	}
+	if errors.Is(err, syscall.EINTR) {
+		fmt.Printf("%%EINTR: write interrupted\n")
+		return
+	}
+	if errors.Is(err, net.ErrClosed) {
+		fmt.Println("error: write attempt on closed socket")
+		return
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		fmt.Printf("%s failed on %s\n", opErr.Op, opErr.Net)
+
+		if opErr.Timeout() {
+			fmt.Printf("error: %s write deadline exceeded", opErr.Net)
+			return
+		}
+	}
+
+	fmt.Printf("write error: %v\n", err)
+}
+
+func stdout(lg *Loggen) {
+	var stamp Ts
+	tmpl := template.Must(template.New("record").Parse(lg.RecordTmpl))
+	for range lg.opt.Operation.Count {
+		stamp.TimeStamp = time.Now().Format(lg.TimeFormat)
+		err := tmpl.Execute(lg.w, stamp)
+		exit.If(err != nil, err, ErrTemplate)
+
+	}
+}
+
+func (lg *Loggen) Close() {
+	if lg.opt.Destination.DstType == `file` {
+		close(lg.fileWChan)
+	}
+
+	lg.presentStats()
+}
+
+// SDG
