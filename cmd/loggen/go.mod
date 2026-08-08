@@ -1,3 +1,5 @@
-module github.com/rpcox/gologgen
+module github.com/rpcox/loggen
 
-go 1.19
+go 1.25.4
+
+require github.com/rpcox/gologgen/pkg/loggen v0.0.3

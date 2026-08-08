@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 )
 
 var (
@@ -18,9 +17,6 @@ var (
 	`
 )
 
-func Usage(b bool, exitCode int) {
-	if b {
-		fmt.Println(usageText)
-		os.Exit(exitCode)
-	}
+func Usage() {
+	fmt.Println(usageText)
 }
