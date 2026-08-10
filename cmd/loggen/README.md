@@ -5,50 +5,37 @@ Generates RFC3164 and RFC5424 syslog records.  The messages are user selecte len
 
 ### Generate RFC 3164 records
 
-Default priority is 'local0.info' and the default message length is 64 byte
+Send a BSD formatted record over TCP to 192.168.1.122:6000 with process name 'spud' and a 64 byte message 
 
-    gologgen -rfc3164 -tcp -server loghost
-
-As received at the destination
-
-    <134>Aug 24 00:30:15 spud gologgen: VKEKFNVRWVOHJREBFKUEPLQRYLHVODSOLCRJVABCBGWUQQHWAMADURJEMWLAJYKK
-
-### Generate RFC 3164 records with RFC 3339 timestamp
-
-    gologgen -rfc3164 -rfc3339 -tcp -server loghost
+    > loggen bsd -dst 192.168.1.122 -dport 6000 -tag spud -msglen 64
 
 As received at the destination
 
-    <134>2023-08-24T00:35:40Z spud gologgen: RVJXCPFBCGUKYPLRRLNECNHLLUNNCODTWKIFBJEPYJLNWLVJYDKCUXJKJEFXFBYK
+    <134>Aug  9 18:48:45 forge.lan spud[7419]: FRMDSFTSODFSNMKTHOGIPFKXGDKNCVGKFMTILKCSUICKAKGSXUXLVQGOHFWMBLKE
 
 ### Generate default RFC 5424 records
 
-    gologgen -tcp -server loghost
+Send an IETF formatted record over TCP to 192.168.1.122:6000 with process name 'spud' and a 64 byte message 
+
+    > loggen ietf -dst 192.168.1.122 -dport 6000 -appname spud -msgid MSGID -msglen 64
 
 As received at the destination
 
-    <134>1 2023-08-24T12:38:15.92Z spud gologgen - - - VHQBLXNPCIJMSOPHKSKQCOCDAAIGERQTYVVKWQLPRDIQSNHNOLFBRQFAOBDSKKTT
+    <134>1 2026-08-09T18:53:34.415Z forge.lan spud 7424 MSGID - XPYIIAYFMLOWTLDABSDMRCAYFJXGLWVMAJDMQVXQDYGOYBPVDLXRTXGRSCKLAVLN
 
-### Generate RFC 5424 records with MSGID
+### View Stats
 
-    gologgen -tcp -server loghost -msgid MYID
+Send an IETF formatted record over TCP to 192.168.1.122:6000 with process name 'spud' and a 64 byte message. Send 123 records per goroutine and check the stats
 
-As received at the destination
+    > loggen ietf -dst 192.168.1.122 -dport 6000 -appname spud -msgid MSGID -msglen 64 -gr 3 -count 123 -stats
+     Starting: 2026-08-10 01:55:58.895705
+      Elapsed: 3.475333ms
+    
+    Worker         Emit   Duration             Bytes Eps
+    tcp-worker-01  123    00d 00:00:00.001930  15375 63725
+    tcp-worker-02  123    00d 00:00:00.001804  15375 68158
+    tcp-worker-03  123    00d 00:00:00.001849  15375 66521
+    
+               AVG 123    00d 00:00:00.001861  15375 66084
+             TOTAL 369                         46125
 
-    <134>1 2023-08-24T12:38:06.99Z spud gologgen - MYID - EUOPTALBYVVFWXAAQKMSLCOFURERYDWTLGMTUVPAEIDTBAPJVQMYNGCATVXHKUAM
-
-### Generate RFC 5424 records with MSGID and PROCID (PID)
-
-    gologgen -tcp -server loghost -msgid MYID -procid
-
-As received at the destination
-
-    <134>1 2023-08-24T12:39:15.17Z spud gologgen 93300 MYID - YDQGDMADSJAYAQFJBNNILTKOBIBDBXXJESVVHRODNQASQHIGMEUCGKNFFKLLNXPM
-
-### Generate RFC 5424 records with MSGID, PROCID and structured data
-
-    gologgen -tcp -server loghost -msgid MYID -procid -sd "[exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"]"
-
-As received at the destination
-
-    <134>1 2023-08-24T12:42:33.08Z spud gologgen 93340 MYID [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] QFCWTLDNWRJMDLFQYNFXHIGEUFLWOODAOJSISGSHDFWMSXCTVVPJSPALJXAKJXSI
