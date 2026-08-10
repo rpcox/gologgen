@@ -6,6 +6,11 @@
     cd gologgen
     go build
 
+### tested on
+
+- Macbook Pro (Tahoe 26.6.1) [arm64]
+- RHEL 9.8 [amd]
+- Ubuntu 24.04.4 LTS [amd]
 
 ### usage
 
