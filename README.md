@@ -14,12 +14,12 @@
 
 ### usage
 
-Send 12345 BSD formatted syslog records per goroutine (3) downrange. The record will appear as
+Send 12345 BSD formatted syslog records per worker (3) downrange. The record will appear as
 
     <134>Aug  9 18:34:42 forge.lan loggen[7356]: JGUVCCWMWSUYATNXIQTNMKAKDXJCIAKUVMUFHSEUFGQFHGIELMBRBJUCCLTTLTBHDEOLVDCBTMWRJXCLWOFTJLVBJEUUPOCAQXMLUQEIXSNQRMTLJANPQMMTMSRTMBIT
 
 
-    > loggen bsd -dst 192.168.1.122  -count 12345 -gr 3 -dport 6000 -stats
+    > loggen bsd -dst 192.168.1.122  -count 12345 -w 3 -dport 6000 -stats
      Starting: 2026-08-10 01:34:42.844600
       Elapsed: 43.315458ms
     
@@ -32,12 +32,12 @@ Send 12345 BSD formatted syslog records per goroutine (3) downrange. The record 
              TOTAL 37035                       6444090
 
 
-Send 12345 IETF formatted syslog records per goroutine (3) downrange. The record will appear as
+Send 12345 IETF formatted syslog records per worker (3) downrange. The record will appear as
 
     <134>1 2026-08-09T18:30:18.043Z forge.lan loggen 7338 - - CACDXBPAGWWHUUCSDTXCWEGDJWJUYYEBELDGGSPDGRHVRGUCFKMWYMPWIFGIAGOBWIIALFCWMWNVOOHSRJUIBKFILYKLPDIOOLYFGABEEVOMBSXCHQEQIFHLJMYKPYYI
 
 
-    > loggen ietf -dst 192.168.1.122  -count 12345 -gr 3 -dport 6000 -stats
+    > loggen ietf -dst 192.168.1.122  -count 12345 -w 3 -dport 6000 -stats
      Starting: 2026-08-10 01:30:17.989031
       Elapsed: 99.228125ms
     
