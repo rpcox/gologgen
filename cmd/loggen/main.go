@@ -1,4 +1,4 @@
-// A tool to generate syslog records
+// A tool to generate RFC 3164 and RFC 5424 formatted syslog records
 package main
 
 import (
@@ -7,12 +7,12 @@ import (
 	"os"
 
 	lg "github.com/rpcox/gologgen/pkg/loggen"
+	"github.com/rpcox/pkg/exit"
 )
 
-const _version = "0.1.0"
+const _version = "0.2.0"
 const _tool = "loggen"
 
-// Build option to track git commit/build if desired
 func Version(b bool) {
 	if b {
 		fmt.Fprintf(os.Stdout, "%s v%s\n", _tool, _version)
@@ -38,12 +38,13 @@ var (
 
 func SetCommonFlags() {
 	for _, fs := range subCmds {
-		fs.StringVar(&opts.Destination.Dst, "dst", "", "Specify the destination [by name, IP or file]")
-		fs.StringVar(&opts.Destination.Port, "dport", "514", "Specify the destination port")
+		fs.StringVar(&opts.Destination.Dst, "dst", "", "Specify the destination [by name or IP]")
+		fs.IntVar(&opts.Destination.Port, "dport", 514, "Specify the destination port")
 		fs.BoolVar(&opts.Operation.Udp, "udp", false, "Use UDP for transport")
 		fs.BoolVar(&opts.Operation.Tls, "tls", false, "Use TLS for transport")
 		fs.IntVar(&opts.Operation.Count, "count", 1, "The number of messages to send to the destination")
-		fs.IntVar(&opts.Operation.GoRoutines, "gr", 1, "Specify the number of Go routines")
+		fs.IntVar(&opts.Operation.Workers, "w", 1, "Specify the number of client workers")
+		fs.StringVar(&opts.Operation.Duration, "duration", "", "Specify the run duration [e.g. 1h30m5s]")
 		fs.StringVar(&opts.Pri, "pri", "local0.info", "Specify the priority [facility.severity]")
 		fs.BoolVar(&opts.Stats, "stats", false, "Display EPS stats")
 		fs.BoolVar(&opts.Debug, "debug", false, "Enable verbose logging to console on stderr")
@@ -70,18 +71,18 @@ func SetSpecificFlags() {
 
 func CheckCmdLine(help, version bool) string {
 	if len(os.Args) == 1 { // nothing on cmd line
-		Usage()
-		os.Exit(1)
+		fmt.Printf("expecting sub command. try '%s help'", _tool)
+		os.Exit(lg.ErrInsufficientArg)
 	}
 
 	cmd, ok := subCmds[os.Args[1]]
 	if !ok {
+		fmt.Println(ok)
 		Version(version)
 		if help {
 			Usage()
-			os.Exit(0)
+			os.Exit(lg.Success)
 		}
-		return "goToDefault"
 	}
 
 	return cmd.Name()
@@ -96,7 +97,6 @@ func main() {
 	flag.Parse()
 
 	subCommand := CheckCmdLine(*_help, *_version)
-
 	switch subCommand {
 	case `bsd`:
 		opts.Operation.Bsd = true
@@ -108,12 +108,9 @@ func main() {
 		os.Exit(lg.Success)
 	case `version`:
 		Version(true)
-	default:
-		fmt.Printf("expecting sub command. try '%s help'", _tool)
-		Usage()
-		os.Exit(1)
 	}
 
+	exit.If(opts.Operation.Tls, fmt.Errorf("-tls not implemented"), lg.ErrNotImplemented)
 	lgen := lg.NewLoggen(&opts)
 	err := lgen.Exec()
 	if err != nil {
