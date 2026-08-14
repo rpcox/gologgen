@@ -1,16 +1,11 @@
 package loggen
 
 import (
-	"errors"
 	"fmt"
-	"io"
-	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
-	"text/template"
 	"time"
 
 	"github.com/rpcox/pkg/exit"
@@ -18,7 +13,7 @@ import (
 
 const (
 	tool    = "pkg-loggen"
-	version = `v0.0.3`
+	version = `v0.2.0`
 )
 
 var (
@@ -156,17 +151,19 @@ type Record struct {
 type Destination struct {
 	Dst      string // from -dst
 	DstType  string // stdout, name, IP
-	Port     string
+	Port     int
 	Protocol string
 }
 
 type Operation struct {
-	Bsd        bool
-	Count      int
-	GoRoutines int
-	MsgLen     int
-	Tls        bool
-	Udp        bool
+	Bsd          bool   // -bsd
+	Count        int    // -count
+	Workers      int    // -w
+	MsgLen       int    // -msglen
+	Tls          bool   // -tls
+	Udp          bool   // -udp
+	Duration     string // -duration
+	timeDuration time.Duration
 }
 
 type Options struct {
@@ -183,8 +180,6 @@ type Loggen struct {
 	TimeFormat string
 	RecordTmpl string
 	opt        *Options
-	fileWChan  chan (string)
-	w          io.Writer
 	statsChan  chan Stats
 	statsSlice []Stats
 	start      time.Time
@@ -207,9 +202,9 @@ func NewLoggen(opts *Options) *Loggen {
 	err := validatePort(opts.Destination.Port) // must be valid port (0 - 65535)
 	exit.If(err != nil, err, ErrPortRange)
 
-	T, err := validateWDst(opts.Destination.Dst) // file, stdout, name or IP
-	exit.If(err != nil, err, ErrHostname)
-	lg.opt.Destination.DstType = T
+	//	T, err := validateWDst(opts.Destination.Dst) // file, stdout, name or IP
+	//	exit.If(err != nil, err, ErrHostname)
+	//	lg.opt.Destination.DstType = T
 
 	lg.format = setFormat(lg.opt.Operation.Bsd) // bsd or ietf
 
@@ -220,13 +215,17 @@ func NewLoggen(opts *Options) *Loggen {
 	err = validateCount(lg.opt.Operation.Count) // can't be < 0
 	exit.If(err != nil, err, ErrCount)
 
+	t, err := validateDuration(lg.opt.Operation.Duration) // can't be < 0
+	exit.If(err != nil, err, ErrCount)
+	lg.opt.Operation.timeDuration = t
+
 	lg.opt.Record.Msg = setMessage(lg.opt.Operation.MsgLen) // gen rand string for now
 
-	n, err := setPriority(lg.opt.Pri) // convert 'facility.severity' to int
+	j, err := setPriority(lg.opt.Pri) // convert 'facility.severity' to int
 	exit.If(err != nil, err, ErrPriority)
-	lg.opt.Record.Pri = n
+	lg.opt.Record.Pri = j
 
-	checkConcurrency(lg.opt.Operation.GoRoutines) // give heads up if -gr > GOMAXPROCS
+	checkConcurrency(lg.opt.Operation.Workers) // give heads up if -gr > GOMAXPROCS
 
 	lg.opt.Record.Pid = strconv.Itoa(os.Getpid())
 	h, err := os.Hostname()
@@ -238,117 +237,48 @@ func NewLoggen(opts *Options) *Loggen {
 	lg.opt.Record.Hostname = h
 	lg.RecordTmpl = setTemplate(lg.opt.Operation.Bsd, lg.format, lg.opt.Record)
 	lg.TimeFormat = setTimeFormat(lg.opt.Operation.Bsd)
-	lg.statsChan = make(chan Stats, lg.opt.Operation.GoRoutines+1)
+	lg.statsChan = make(chan Stats, lg.opt.Operation.Workers+1)
 
 	return &lg
 }
 
-// loggen -dst stdout -rfc3164 -pri kernel.info -appname spud                        -count 2 -msglen 128 -gr 2
-// loggen -dst stdout          -pri kernel.info -appname spud -msgid test -sd slsldf -count 2 -msglen 128 -gr 2
+// Execute the request
 func (lg *Loggen) Exec() error {
+	var wg sync.WaitGroup
+	var client ClientFunc
 
-	switch lg.opt.Destination.DstType {
-	case `file`:
-		lg.fileWChan = make(chan string, 100)
-		// need to determine file, pipe, or device
+	switch lg.opt.Destination.Protocol {
+	case `udp`:
+		client = udpClient
+	case `tcp`:
+		client = tcpClient
+	case `tls`:
+		client = tlsClient
+	}
 
-	case `stdout`:
-		lg.w = os.Stdout
-		stdout(lg)
-	case `ip`:
-		fallthrough
-	case `name`:
-		var wg sync.WaitGroup
-		var client clientFunc
+	var intr Interrupt
+	lg.start = time.Now()
+	fmt.Printf(" Starting: %s\n", lg.start.UTC().Format(timeFormat))
+	for i := range lg.opt.Operation.Workers {
+		wg.Add(1)
+		go client(i+1, *lg, &intr, &wg)
+	}
 
-		switch lg.opt.Destination.Protocol {
-		case `udp`:
-			client = udpClient
-		case `tcp`:
-			client = tcpClient
-		case `tls`:
-			client = tlsClient
-		default:
-			// shouldn't be here
-			return fmt.Errorf("%%err: unsupported protcol: '%s'", lg.opt.Destination.DstType)
-		}
+	wg.Wait()
+	close(lg.statsChan)
+	if intr.yes {
+		fmt.Printf("\nInterrupt: %s\n", intr.at)
+	}
+	fmt.Printf("  Elapsed: %v\n", time.Since(lg.start))
 
-		var intr Interrupt
-		lg.start = time.Now()
-		fmt.Printf(" Starting: %s\n", lg.start.UTC().Format(timeFormat))
-		for i := range lg.opt.Operation.GoRoutines {
-			wg.Add(1)
-			go client(i+1, *lg, &intr, &wg)
-		}
-
-		wg.Wait()
-		close(lg.statsChan)
-		if intr.yes {
-			fmt.Printf("\nInterrupt: %s\n", intr.at)
-		}
-		fmt.Printf("  Elapsed: %v\n", time.Since(lg.start))
-
-		for stat := range lg.statsChan {
-			lg.statsSlice = append(lg.statsSlice, stat)
-		}
-
+	for stat := range lg.statsChan {
+		lg.statsSlice = append(lg.statsSlice, stat)
 	}
 
 	return nil
 }
 
-func ReportWriteError(err error) {
-	if errors.Is(err, syscall.EPIPE) {
-		fmt.Printf("%%EPIPE: broken pipe\n")
-		return
-	}
-	if errors.Is(err, syscall.ECONNRESET) {
-		fmt.Printf("%%ECONNRESET: connection reset by peer\n")
-		return
-	}
-
-	if errors.Is(err, syscall.EBADF) {
-		fmt.Printf("%%EBADF: bad file descriptorr\n")
-		return
-	}
-	if errors.Is(err, syscall.EINTR) {
-		fmt.Printf("%%EINTR: write interrupted\n")
-		return
-	}
-	if errors.Is(err, net.ErrClosed) {
-		fmt.Println("error: write attempt on closed socket")
-		return
-	}
-
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		fmt.Printf("%s failed on %s\n", opErr.Op, opErr.Net)
-
-		if opErr.Timeout() {
-			fmt.Printf("error: %s write deadline exceeded", opErr.Net)
-			return
-		}
-	}
-
-	fmt.Printf("write error: %v\n", err)
-}
-
-func stdout(lg *Loggen) {
-	var stamp Ts
-	tmpl := template.Must(template.New("record").Parse(lg.RecordTmpl))
-	for range lg.opt.Operation.Count {
-		stamp.TimeStamp = time.Now().Format(lg.TimeFormat)
-		err := tmpl.Execute(lg.w, stamp)
-		exit.If(err != nil, err, ErrTemplate)
-
-	}
-}
-
 func (lg *Loggen) Close() {
-	if lg.opt.Destination.DstType == `file` {
-		close(lg.fileWChan)
-	}
-
 	lg.presentStats()
 }
 

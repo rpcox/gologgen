@@ -3,17 +3,15 @@ package loggen
 import (
 	"fmt"
 	"math/rand"
-	"net"
-	"net/netip"
 	"os"
-	"regexp"
 	"runtime"
-	"strconv"
 	"time"
 )
 
 const (
 	Success = iota
+	ErrInsufficientArg
+	ErrNotImplemented
 	ErrHostname
 	ErrPortRange
 	ErrProtocol
@@ -45,63 +43,28 @@ func mapToSlice(m map[string]int) []string {
 	return sl
 }
 
-// Validate the supplied port is within range
-func validatePort(port string) error {
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return err
+// Validate the duration string
+func validateDuration(d string) (time.Duration, error) {
+	if d == "" {
+		return 0, nil
 	}
 
-	if p < 1 || p > 65535 {
-		return fmt.Errorf("%%err: port value '%s' out of range", port)
+	t, err := time.ParseDuration(d)
+	if err != nil {
+		var null time.Duration
+		return null, err
+	}
+
+	return t, nil
+}
+
+// Validate the supplied port is within range
+func validatePort(port int) error {
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("%%err: port value '%d' out of range", port)
 	}
 
 	return nil
-}
-
-func isValidIP(s string) bool {
-	addr, err := netip.ParseAddr(s)
-	return err == nil && addr.IsValid()
-}
-
-// Validate the destination. Could be a hostname, IP, stdout or file
-func validateWDst(dst string) (string, error) {
-	l := len(dst)
-	if l == 0 {
-		return ``, fmt.Errorf("%%err: -dst required")
-	}
-
-	if dst == `stdout` {
-		return `stdout`, nil
-	}
-
-	// do we have a valid IP?
-	if isValidIP(dst) {
-		return `ip`, nil
-	}
-
-	// do we have a file?
-	slash := regexp.MustCompile(`\/`)
-	if slash.MatchString(dst) {
-		return `file`, nil
-	}
-
-	// do we have a hostname?
-	dot := regexp.MustCompile(`\.`)
-	if l > 63 && !dot.MatchString(dst) { // non-fqdn hostname may not be > 63 char
-		return ``, fmt.Errorf("%%err: dst hostname name exceeds maximum characters (63)")
-	}
-
-	if l > 253 && dot.MatchString(dst) { // an fqdn may not exceed 253 char
-		return ``, fmt.Errorf("%%err: dst fqdn length exceeded. max = 253")
-	}
-
-	_, err := net.LookupIP(dst)
-	if err != nil {
-		return ``, fmt.Errorf("%%err: dns lookup for -dst '%s' failed", dst)
-	}
-
-	return `name`, nil
 }
 
 // RFC 3164 (BSD) or RFC 5424 (IETF) format. The string formatter is used to
@@ -179,16 +142,16 @@ func setPriority(priority string) (int, error) {
 	return n, nil
 }
 
-// Go will try to give you the -gr you desire, but if -gr > GOMAXPROCS, you will have some go
+// Go will try to give you the -w you desire, but if -w > GOMAXPROCS, you will have some go
 // routines sitting in wait states
-func checkConcurrency(gr int) {
+func checkConcurrency(w int) {
 	cpu := runtime.NumCPU()
 	var n int
 
-	if gr > cpu {
-		fmt.Fprintf(os.Stderr, "%%warn: requested go routine count -gr=%d > NumCPU=%d\n", gr, cpu)
-		n = runtime.GOMAXPROCS(gr)
-		if gr > n {
+	if w > cpu {
+		fmt.Fprintf(os.Stderr, "%%warn: requested worker count -w=%d > NumCPU=%d\n", w, cpu)
+		n = runtime.GOMAXPROCS(w)
+		if w > n {
 			fmt.Fprintf(os.Stderr, "%%note: GOMAXPROCS returned %d\n", n)
 		}
 	}
